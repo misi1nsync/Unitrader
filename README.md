@@ -120,6 +120,17 @@ verification approved it, it has a stop-loss and target, no position is
 already open, and size stays within 2% of equity per position and 10% in
 total.
 
+### Risk monitor
+
+`monitor_risk` (`unitrader/risk.py`) runs every minute on a background thread
+under `unitrader-run`. It marks open positions to live Bybit prices and tracks
+the equity high-water mark in `data/risk.json`. If equity falls more than 5%
+below the peak, it closes every position, writes `data/KILL` so no new trades
+open, and appends the event to `data/STATE.md`. It fires once; delete
+`data/KILL` after review to resume, which also resets the peak. If a live
+price is missing for an open position, that tick does nothing and logs an
+error rather than acting on stale data.
+
 No live broker is implemented: `UNITRADER_EXECUTION` accepts `paper`
 (default) or `off`. A live broker must implement the `Broker` protocol and
 attach stop-loss and take-profit to the exchange order itself.

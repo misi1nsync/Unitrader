@@ -123,3 +123,25 @@ def fetch_market_data(
     if failed:
         log.warning("ingested %d/%d symbols; missing: %s", len(frames), len(symbols), ", ".join(failed))
     return pd.concat(frames, ignore_index=True)
+
+
+BYBIT_TICKERS_URL = "https://api.bybit.com/v5/market/tickers"
+
+
+def fetch_last_prices(
+    symbols: list[str], *, session: requests.Session | None = None, timeout: float = 5.0
+) -> dict[str, float]:
+    """Latest traded price per symbol. Symbols that fail are omitted."""
+    http = session or requests.Session()
+    prices = {}
+    for symbol in symbols:
+        try:
+            resp = http.get(BYBIT_TICKERS_URL, params={"category": "linear", "symbol": symbol}, timeout=timeout)
+            resp.raise_for_status()
+            payload = resp.json()
+            if payload.get("retCode") != 0:
+                raise MarketDataError(f"Bybit error {payload.get('retCode')}: {payload.get('retMsg')}")
+            prices[symbol] = float(payload["result"]["list"][0]["lastPrice"])
+        except (requests.RequestException, MarketDataError, KeyError, IndexError, ValueError) as exc:
+            log.warning("no live price for %s: %s", symbol, exc)
+    return prices

@@ -7,6 +7,7 @@ crash after entry never leaves a position unprotected.
 
 from __future__ import annotations
 
+import threading
 from datetime import datetime
 from typing import Protocol
 
@@ -16,10 +17,16 @@ from unitrader.state import State
 
 FEE = 0.0005  # per side, matches the backtests
 
+# Execution (hourly) and the risk monitor (every minute) run in one process
+# on different threads; hold this around any read-modify-write of the account.
+ACCOUNT_LOCK = threading.RLock()
+
 
 class Broker(Protocol):
-    def equity(self) -> float: ...
+    def equity(self, prices: dict[str, float] | None = None) -> float: ...
     def positions(self) -> dict[str, dict]: ...
+    def get_positions(self) -> dict[str, dict]: ...
+    def close_all(self, prices: dict[str, float], at: datetime, reason: str) -> list[dict]: ...
     def open_position(self, *, symbol: str, side: str, qty: float, price: float, stop_loss: float,
                       take_profit: float, opened_at: datetime, close_by: datetime, signal_id: str) -> dict: ...
     def close_position(self, symbol: str, price: float, at: datetime, reason: str) -> dict: ...
@@ -41,12 +48,25 @@ class PaperBroker:
     def _save(self) -> None:
         self.store.write(self.NAME, self.account)
 
-    def equity(self) -> float:
-        # Positions are booked at entry; open P&L is only realised on close.
-        return self.account["cash"]
+    def equity(self, prices: dict[str, float] | None = None) -> float:
+        """Realised equity, plus open P&L marked at ``prices`` when given."""
+        equity = self.account["cash"]
+        for symbol, pos in self.account["positions"].items():
+            if prices and symbol in prices:
+                direction = 1 if pos["side"] == "long" else -1
+                equity += direction * (prices[symbol] - pos["entry_price"]) * pos["qty"]
+        return equity
 
     def positions(self) -> dict[str, dict]:
         return dict(self.account["positions"])
+
+    get_positions = positions
+
+    def close_all(self, prices: dict[str, float], at: datetime, reason: str) -> list[dict]:
+        missing = set(self.account["positions"]) - set(prices)
+        if missing:
+            raise ValueError(f"no price to close {sorted(missing)}")
+        return [self.close_position(s, prices[s], at, reason) for s in list(self.account["positions"])]
 
     def open_position(self, *, symbol, side, qty, price, stop_loss, take_profit, opened_at, close_by, signal_id):
         if symbol in self.account["positions"]:

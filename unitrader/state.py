@@ -50,3 +50,11 @@ class State:
         if target.suffix == ".json":
             return json.loads(target.read_text())
         return pd.read_parquet(target)
+
+    def append(self, name: str, text: str) -> Path:
+        """Append a line to a text log such as STATE.md (created if missing)."""
+        target = self.path(name)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with open(target, "a") as f:
+            f.write(text.rstrip("\n") + "\n")
+        return target

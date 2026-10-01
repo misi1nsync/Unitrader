@@ -17,7 +17,7 @@ import math
 from datetime import datetime, timedelta, timezone
 
 from unitrader import config, events, ingest
-from unitrader.broker import Broker, PaperBroker
+from unitrader.broker import ACCOUNT_LOCK, Broker, PaperBroker
 
 log = logging.getLogger(__name__)
 
@@ -33,7 +33,8 @@ def clock() -> datetime:
 
 
 def make_broker() -> Broker:
-    if config.execution_mode == "paper":
+    # "off" still loads the paper account so the risk monitor can protect it.
+    if config.execution_mode in ("paper", "off"):
         return PaperBroker(ingest.state, config.paper_starting_equity)
     raise RuntimeError(f"execution mode {config.execution_mode!r} has no broker implementation")
 
@@ -45,7 +46,8 @@ def auto_mode(fn):
             log.info("execution off; not acting on signal")
             return
         try:
-            fn(ingest.state.read("pending_signal.json"))
+            with ACCOUNT_LOCK:
+                fn(ingest.state.read("pending_signal.json"))
         except Exception:
             log.exception("%s failed", fn.__name__)
 
