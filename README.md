@@ -106,6 +106,24 @@ unitrader-backfill            # 3 years of 1h bars per symbol into data/history/
 after which each hourly ingest appends new bars. Without a backfill, every
 non-flat signal fails verification.
 
+## Execution (paper only)
+
+After each signal is written, `signal_ready` fires and `@auto_mode execute`
+acts on it with the **paper broker** (`unitrader/broker.py`), which fills at
+the last close and simulates stop/target/horizon exits from the ingested bars.
+State lives in `data/paper_account.json`; every action is logged to
+`data/active_trades.json`.
+
+Before any order: no `data/KILL` file, daily loss under 3%, signal still
+pending and unexpired, not already executed; per symbol, the recorded
+verification approved it, it has a stop-loss and target, no position is
+already open, and size stays within 2% of equity per position and 10% in
+total.
+
+No live broker is implemented: `UNITRADER_EXECUTION` accepts `paper`
+(default) or `off`. A live broker must implement the `Broker` protocol and
+attach stop-loss and take-profit to the exchange order itself.
+
 Needs `ANTHROPIC_API_KEY` (or an `ant auth login` profile). Run once against
 the current data with `unitrader-signal`.
 

@@ -28,3 +28,7 @@ SECTORS = {
     "XRPUSDT": "payments",
     "DOGEUSDT": "meme",
 }
+
+# Order execution. "off" or "paper"; live brokers are not implemented.
+execution_mode = os.environ.get("UNITRADER_EXECUTION", "paper")
+paper_starting_equity = float(os.environ.get("UNITRADER_PAPER_EQUITY", "10000"))

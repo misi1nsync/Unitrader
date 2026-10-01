@@ -7,7 +7,7 @@ import logging
 import math
 from datetime import datetime, timedelta, timezone
 
-from unitrader import claude, config, ingest, rules, verification  # noqa: F401  (registers verify_signal)
+from unitrader import claude, config, events, ingest, rules, verification  # noqa: F401  (registers verify_signal)
 from unitrader.checks import run_checkers
 from unitrader.scheduler import loop
 from unitrader.timeutil import parse_duration
@@ -114,6 +114,7 @@ def generate_signal():
         **output,
     }
     ingest.state.write("pending_signal.json", signal)
+    events.emit("signal_ready")
     for note in adjustments:
         log.warning("rule enforced: %s", note)
     actions = ", ".join(f"{s['symbol']}={s['action']}" for s in output["signals"])

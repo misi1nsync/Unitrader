@@ -2,7 +2,7 @@
 
 import logging
 
-from unitrader import signals  # noqa: F401  (subscribes generate_signal to data_updated)
+from unitrader import execution, signals  # noqa: F401  (subscribe generate_signal and execute)
 from unitrader.ingest import ingest_data
 
 
