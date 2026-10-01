@@ -1,6 +1,6 @@
 import pandas as pd
 
-from unitrader import ingest
+from unitrader import events, ingest
 
 
 def test_ingest_writes_latest_data(tmp_path, monkeypatch):
@@ -13,7 +13,10 @@ def test_ingest_writes_latest_data(tmp_path, monkeypatch):
 
     monkeypatch.setattr(ingest, "fetch_market_data", fake_fetch)
     monkeypatch.setattr(ingest, "state", ingest.State(tmp_path))
+    emitted = []
+    monkeypatch.setattr(events, "emit", emitted.append)
     assert ingest.ingest_data.run_once() is True
+    assert emitted == ["data_updated"]
     assert seen == {"symbols": ingest.universe, "lookback": "30d"}
     pd.testing.assert_frame_equal(pd.read_parquet(tmp_path / "latest_data.parquet"), frame)
 
@@ -28,5 +31,8 @@ def test_failed_ingest_does_not_overwrite_previous_data(tmp_path, monkeypatch):
 
     monkeypatch.setattr(ingest, "fetch_market_data", failing_fetch)
     monkeypatch.setattr(ingest, "state", state)
+    emitted = []
+    monkeypatch.setattr(events, "emit", emitted.append)
     assert ingest.ingest_data.run_once() is False
+    assert emitted == []
     pd.testing.assert_frame_equal(state.read("latest_data.parquet"), old)
