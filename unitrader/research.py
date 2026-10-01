@@ -47,7 +47,8 @@ def _sharpe(returns: np.ndarray) -> float:
     return float(returns.mean() / sd * math.sqrt(BARS_PER_YEAR)) if sd > 0 else 0.0
 
 
-def walk_forward(X: np.ndarray, y: np.ndarray, timestamps: pd.Series, *, sharpe_min: float) -> list[dict]:
+def walk_forward_returns(X: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Out-of-sample strategy log returns, net of costs, and their bar indices."""
     has_x = np.isfinite(X).all(axis=1)
     trainable = has_x & np.isfinite(y)
     Xz = np.where(trainable[:, None], np.nan_to_num(X), 0.0)
@@ -67,12 +68,16 @@ def walk_forward(X: np.ndarray, y: np.ndarray, timestamps: pd.Series, *, sharpe_
         rets.append(pos * y[t] - COST * abs(pos - prev))
         rows.append(t)
         prev = pos
+    return np.asarray(rows, dtype=int), np.asarray(rets, dtype=float)
 
+
+def walk_forward(X: np.ndarray, y: np.ndarray, timestamps: pd.Series, *, sharpe_min: float) -> list[dict]:
+    rows, rets = walk_forward_returns(X, y)
     if len(rets) < N_BACKTESTS * 2:
         return []
     out = []
     for chunk in np.array_split(np.arange(len(rets)), N_BACKTESTS):
-        r = np.asarray(rets)[chunk]
+        r = rets[chunk]
         out.append({
             "from": timestamps.iloc[rows[chunk[0]]].isoformat(),
             "to": timestamps.iloc[rows[chunk[-1]]].isoformat(),
@@ -82,6 +87,51 @@ def walk_forward(X: np.ndarray, y: np.ndarray, timestamps: pd.Series, *, sharpe_
             "passed": bool(_sharpe(r) > sharpe_min),
         })
     return out
+
+
+def newey_west_tstat(returns: np.ndarray, lags: int | None = None) -> float:
+    """t-stat of the mean return with a Newey-West (Bartlett) HAC variance."""
+    r = np.asarray(returns, dtype=float)
+    n = len(r)
+    if n < 2:
+        return 0.0
+    if lags is None:
+        lags = int(math.floor(4 * (n / 100) ** (2 / 9)))
+    e = r - r.mean()
+    lrv = e @ e / n
+    for lag in range(1, min(lags, n - 1) + 1):
+        lrv += 2 * (1 - lag / (lags + 1)) * (e[lag:] @ e[:-lag]) / n
+    return float(r.mean() / math.sqrt(lrv / n)) if lrv > 0 else 0.0
+
+
+def max_drawdown_pct(returns: np.ndarray) -> float:
+    """Largest peak-to-trough fall of the compounded equity curve, in percent."""
+    if len(returns) == 0:
+        return 0.0
+    equity = np.exp(np.cumsum(np.r_[0.0, returns]))
+    return float((1 - equity / np.maximum.accumulate(equity)).max() * 100)
+
+
+def long_backtest(df: pd.DataFrame) -> dict:
+    """Whole-history walk-forward stats of the regression strategy."""
+    X, y, ts = design_matrix(df)
+    rows, rets = walk_forward_returns(X, y)
+    if len(rets) == 0:
+        return {"oos_bars": 0, "oos_days": 0.0, "sharpe": 0.0, "max_drawdown_pct": 0.0,
+                "newey_west_t": 0.0, "total_return_pct": 0.0, "oos_from": None, "oos_to": None,
+                "time_in_market_pct": 0.0}
+    start, end = ts.iloc[rows[0]], ts.iloc[rows[-1]]
+    return {
+        "oos_from": start.isoformat(),
+        "oos_to": end.isoformat(),
+        "oos_bars": int(len(rets)),
+        "oos_days": round((end - start).total_seconds() / 86400, 1),
+        "sharpe": round(_sharpe(rets), 3),
+        "max_drawdown_pct": round(max_drawdown_pct(rets), 3),
+        "newey_west_t": round(newey_west_tstat(rets), 3),
+        "total_return_pct": round(float(np.expm1(rets.sum()) * 100), 3),
+        "time_in_market_pct": round(float((rets != 0).mean() * 100), 1),
+    }
 
 
 def fit(X: np.ndarray, y: np.ndarray) -> dict:

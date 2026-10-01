@@ -17,6 +17,7 @@ dev = ["pytest>=8"]
 unitrader-ingest = "unitrader.ingest:main"
 unitrader-signal = "unitrader.signals:main"
 unitrader-run = "unitrader.run:main"
+unitrader-backfill = "unitrader.history:main"
 
 [build-system]
 requires = ["setuptools>=68"]

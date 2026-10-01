@@ -79,6 +79,33 @@ def generate_signal():
 - **Pending only:** nothing is traded. The file carries `status: "pending"`
   and an `expires_at` one interval out; consumers must ignore expired signals.
 
+## Signal verification
+
+Every non-flat signal must pass each registered `@checker` before it stands;
+one that fails is forced flat and the reason is recorded under `verification`
+and `adjustments`.
+
+`verify_signal` (`unitrader/verification.py`) walk-forward backtests the
+regression strategy on the symbol's long hourly history and requires, in code:
+
+- Sharpe ratio above 1.5
+- Max drawdown below 10 percent
+- Newey-West t-stat above 2.0
+- Out of sample period at least 2 years
+
+Only if all four pass does Claude review the signal with the
+`backtest_verification` skill. The review can reject but never overrides a
+failed rule; if the review errors or is declined, the signal is rejected.
+
+The 2-year rule needs more than the 30-day ingest window. Backfill once:
+
+```bash
+unitrader-backfill            # 3 years of 1h bars per symbol into data/history/
+```
+
+after which each hourly ingest appends new bars. Without a backfill, every
+non-flat signal fails verification.
+
 Needs `ANTHROPIC_API_KEY` (or an `ant auth login` profile). Run once against
 the current data with `unitrader-signal`.
 

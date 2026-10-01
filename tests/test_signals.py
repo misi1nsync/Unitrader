@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from conftest import make_bars
-from unitrader import claude, events, ingest, rules, signals
+from unitrader import claude, events, history, ingest, rules, signals
 from unitrader.claude import SkillResult
 from unitrader.state import State
 
@@ -52,6 +52,7 @@ def setup(tmp_path, monkeypatch):
     data = pd.concat([make_bars("BTCUSDT", ar=0.4, seed=3), make_bars("ETHUSDT", seed=11)], ignore_index=True)
     state.write("latest_data.parquet", data)
     monkeypatch.setattr(ingest, "state", state)
+    monkeypatch.setattr(history, "_store", lambda: state)
     monkeypatch.setattr(signals, "clock", lambda: datetime(2026, 10, 2, 9, tzinfo=timezone.utc))
     ctx = rules.evaluate(data, datetime(2026, 10, 2, 9, tzinfo=timezone.utc))
     btc = ctx["symbols"]["BTCUSDT"]
@@ -76,8 +77,14 @@ def model_output(ctx, btc_action=None, btc_size=1.5):
     ]}
 
 
+def approve_review(**kw):
+    return SkillResult({"verdict": "approve", "concerns": [], "summary": "ok"}, "claude-opus-5-5")
+
+
 def test_generate_signal_enforces_rules(setup, monkeypatch):
     state, ctx = setup
+    history.merge("BTCUSDT", make_bars("BTCUSDT", n=24 * 760, ar=0.4, seed=3), state)
+    monkeypatch.setattr(claude, "invoke", approve_review)
     sent = {}
 
     def fake_run_skill(name, payload):
@@ -96,6 +103,18 @@ def test_generate_signal_enforces_rules(setup, monkeypatch):
     assert any(a.startswith("ETHUSDT: long -> flat") for a in written["adjustments"])
     assert written["gates"]["ETHUSDT"]["blocked_reasons"]
     assert written["status"] == "pending" and written["model"] == "claude-opus-5-5"
+    assert written["verification"]["BTCUSDT"]["verify_signal"]["approved"]
+
+
+def test_unverified_signal_is_forced_flat(setup, monkeypatch):
+    state, ctx = setup  # no long history for BTC
+    monkeypatch.setattr(claude, "run_skill", lambda name, payload: SkillResult(output=model_output(ctx), model="m"))
+    assert signals.generate_signal.run_once() is True
+    written = state.read("pending_signal.json")
+    btc = next(s for s in written["signals"] if s["symbol"] == "BTCUSDT")
+    assert btc["action"] == "flat" and btc["position_size_pct"] == 0
+    assert not written["verification"]["BTCUSDT"]["verify_signal"]["approved"]
+    assert any("verification" in a for a in written["adjustments"])
 
 
 def test_fomc_day_skips_model_call(setup, monkeypatch):

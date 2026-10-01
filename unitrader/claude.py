@@ -36,6 +36,10 @@ class SkillResult:
     model: str
     usage: dict[str, Any] = field(default_factory=dict)
 
+    @property
+    def verdict(self) -> Any:
+        return self.output.get("verdict")
+
 
 @dataclass(frozen=True)
 class Skill:
@@ -74,13 +78,33 @@ def run_skill(
     model: str | None = None,
     effort: str | None = None,
 ) -> SkillResult:
-    """Run skill ``name`` over ``data`` and return its schema-valid JSON output.
+    """Run skill ``name`` over market ``data`` and return its schema-valid JSON output.
 
     A DataFrame of OHLCV bars is summarized into per-symbol features first;
     a dict is sent as-is.
     """
-    skill = Skill.load(name)
     payload = summarize(data) if isinstance(data, pd.DataFrame) else data
+    return _call(name, "Market data summary:\n\n" + json.dumps(payload, separators=(",", ":")),
+                 client=client, model=model, effort=effort)
+
+
+def invoke(skill: str, *, client: anthropic.Anthropic | None = None, model: str | None = None,
+           effort: str | None = None, **inputs: Any) -> SkillResult:
+    """Run ``skill`` with named JSON-serializable inputs, e.g. invoke("x", signal=..., rules=[...])."""
+    name = skill.removesuffix(".md").removesuffix("_skill")
+    return _call(name, "Inputs:\n\n" + json.dumps(inputs, separators=(",", ":"), default=str),
+                 client=client, model=model, effort=effort)
+
+
+def _call(
+    name: str,
+    content: str,
+    *,
+    client: anthropic.Anthropic | None,
+    model: str | None,
+    effort: str | None,
+) -> SkillResult:
+    skill = Skill.load(name)
     client = client or _default_client()
 
     response = client.beta.messages.create(
@@ -95,12 +119,8 @@ def run_skill(
             "effort": effort or config.effort,
             "format": {"type": "json_schema", "schema": skill.schema},
         },
-        messages=[{
-            "role": "user",
-            "content": "Market data summary:\n\n" + json.dumps(payload, separators=(",", ":")),
-        }],
+        messages=[{"role": "user", "content": content}],
     )
-
     if response.stop_reason == "refusal":
         details = response.stop_details
         category = getattr(details, "category", None) if details else None

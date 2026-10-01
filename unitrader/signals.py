@@ -7,7 +7,8 @@ import logging
 import math
 from datetime import datetime, timedelta, timezone
 
-from unitrader import claude, config, ingest, rules
+from unitrader import claude, config, ingest, rules, verification  # noqa: F401  (registers verify_signal)
+from unitrader.checks import run_checkers
 from unitrader.scheduler import loop
 from unitrader.timeutil import parse_duration
 
@@ -74,6 +75,21 @@ def generate_signal():
         output, adjustments = rules.enforce(result.output, context)
         model, usage = result.model, result.usage
 
+    verification = {}
+    for i, sig in enumerate(output["signals"]):
+        if sig["action"] == "flat":
+            continue
+        verdicts = run_checkers(sig)
+        verification[sig["symbol"]] = {
+            name: {"approved": v.approved, "reasons": v.reasons, **v.details} for name, v in verdicts.items()
+        }
+        rejected = [r for v in verdicts.values() if not v.approved for r in v.reasons]
+        if rejected:
+            info = context["symbols"][sig["symbol"]]
+            why = "; ".join(rejected)
+            adjustments.append(f"{sig['symbol']}: {sig['action']} -> flat (verification: {why})")
+            output["signals"][i] = rules.flat_signal(sig["symbol"], info, f"Failed verification: {why}")
+
     signal = {
         "status": "pending",
         "skill": SKILL,
@@ -92,6 +108,7 @@ def generate_signal():
             }
             for sym, info in context["symbols"].items()
         },
+        "verification": verification,
         "adjustments": adjustments,
         "usage": usage,
         **output,
