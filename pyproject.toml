@@ -1,0 +1,23 @@
+[project]
+name = "unitrader"
+version = "0.1.0"
+description = "Market data ingestion and trading research tools"
+requires-python = ">=3.10"
+dependencies = [
+    "pandas>=2.0",
+    "pyarrow>=14",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+unitrader-ingest = "unitrader.ingest:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["unitrader"]
