@@ -55,17 +55,27 @@ def generate_signal():
     state.write("pending_signal.json", signal)
 ```
 
-- **Skill:** `unitrader/skills/alpha_research/SKILL.md` is the system prompt;
-  `schema.json` next to it is enforced with structured outputs. Add a skill by
-  adding a directory with those two files.
-- **Input:** the 30-day bars are reduced to per-symbol features (returns,
-  volatility, ATR, SMA20/50, RSI, volume, last 48 closes) rather than sent raw.
+- **Skill:** `unitrader/skills/alpha_research/SKILL.md` holds the goal,
+  rules and lessons learned and is the system prompt; `schema.json` next to it
+  is enforced with structured outputs.
+- **Model:** an OLS regression of the next-hour return on the last 1h
+  return, 24h return and relative volume, fitted on the 30-day window
+  (`unitrader/research.py`). Five walk-forward backtests of the same model
+  are run every hour.
+- **Rules are enforced in code** (`unitrader/rules.py`), not left to the LLM:
+  a symbol may only trade in the regression's direction, and only if Sharpe
+  > 1.5 in at least 3 of the 5 backtests, it isn't an FOMC statement day, and
+  it has no earnings within 48h. Sizes are clamped to 2% per signal and 30%
+  per sector (`config.SECTORS`). Overrides are listed under `adjustments`.
+- **Calendar:** `unitrader/calendar.json` holds FOMC statement days and
+  earnings dates. Add each new year's FOMC dates when the Fed publishes them.
+- **No-trade hours skip the model call:** if no symbol may trade, an all-flat
+  signal is written without calling Claude.
 - **Model:** `claude-opus-5-5` at effort `high`, with server-side
-  `fallbacks: "default"` so a safety decline is retried on Anthropic's
-  recommended fallback model; the model that answered is recorded in the file.
-- **Validation:** stops/targets must sit on the correct side of entry,
-  conviction in [0, 1], exactly one signal per ingested symbol. Invalid
-  output, a refusal, or truncation leaves the previous file untouched.
+  `fallbacks: "default"`; the model that answered is recorded in the file.
+- **Validation:** malformed output (stops on the wrong side, missing
+  symbols, conviction outside [0, 1]), a refusal, or truncation leaves the
+  previous file untouched.
 - **Pending only:** nothing is traded. The file carries `status: "pending"`
   and an `expires_at` one interval out; consumers must ignore expired signals.
 

@@ -1,0 +1,8 @@
+{
+  "_comment": "Event calendar for the alpha_research rules. FOMC dates are statement days (second day of each meeting), from the Federal Reserve's published schedule. Add next year's dates when the Fed publishes them. Earnings entries: {\"symbol\": \"XYZ\", \"datetime\": \"2026-11-04T21:00:00+00:00\"}; crypto perps have none.",
+  "fomc_announcements": [
+    "2026-01-28", "2026-03-18", "2026-04-29", "2026-06-17",
+    "2026-07-29", "2026-09-16", "2026-10-28", "2026-12-09"
+  ],
+  "earnings": []
+}

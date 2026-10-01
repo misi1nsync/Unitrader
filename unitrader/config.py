@@ -19,3 +19,12 @@ interval = os.environ.get("UNITRADER_INTERVAL", "1h")
 lookback = os.environ.get("UNITRADER_LOOKBACK", "30d")
 model = os.environ.get("UNITRADER_MODEL", "claude-opus-5-5")
 effort = os.environ.get("UNITRADER_EFFORT", "high")
+
+# Sector map for the 30% sector exposure cap. Unlisted symbols are their own sector.
+SECTORS = {
+    "BTCUSDT": "store_of_value",
+    "ETHUSDT": "layer1",
+    "SOLUSDT": "layer1",
+    "XRPUSDT": "payments",
+    "DOGEUSDT": "meme",
+}
