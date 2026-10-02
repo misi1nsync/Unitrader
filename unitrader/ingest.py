@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import logging
 
-from unitrader import config
+from unitrader import config, events, history
 from unitrader.market_data import fetch_market_data
 from unitrader.scheduler import loop
 from unitrader.state import State
@@ -18,6 +18,8 @@ universe = config.universe
 def ingest_data():
     data = fetch_market_data(symbols=universe, lookback=config.lookback)
     state.write("latest_data.parquet", data)
+    history.append_from_ingest(data, state)
+    events.emit("data_updated")
 
 
 def main(argv: list[str] | None = None) -> None:

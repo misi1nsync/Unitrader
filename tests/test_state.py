@@ -32,3 +32,14 @@ def test_failed_write_keeps_previous_file(tmp_path, monkeypatch):
 def test_rejects_paths_outside_state_dir(tmp_path):
     with pytest.raises(ValueError):
         State(tmp_path).path("../escape.parquet")
+
+
+def test_json_roundtrip(tmp_path):
+    state = State(tmp_path)
+    state.write("pending_signal.json", {"status": "pending", "signals": [1, 2]})
+    assert state.read("pending_signal.json") == {"status": "pending", "signals": [1, 2]}
+
+
+def test_rejects_unknown_extension(tmp_path):
+    with pytest.raises(ValueError):
+        State(tmp_path).write("notes.txt", {})

@@ -1,0 +1,79 @@
+{
+  "type": "object",
+  "properties": {
+    "market_summary": {
+      "type": "string"
+    },
+    "signals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "symbol": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "long",
+              "short",
+              "flat"
+            ]
+          },
+          "conviction": {
+            "type": "number"
+          },
+          "position_size_pct": {
+            "type": "number"
+          },
+          "horizon_hours": {
+            "type": "integer"
+          },
+          "entry_reference": {
+            "type": "number"
+          },
+          "stop_loss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "take_profit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rationale": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "action",
+          "conviction",
+          "position_size_pct",
+          "horizon_hours",
+          "entry_reference",
+          "stop_loss",
+          "take_profit",
+          "rationale"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "market_summary",
+    "signals"
+  ],
+  "additionalProperties": false
+}
